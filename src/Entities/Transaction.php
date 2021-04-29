@@ -4,6 +4,7 @@ namespace GlobalPayments\Api\Entities;
 
 use GlobalPayments\Api\Builders\AuthorizationBuilder;
 use GlobalPayments\Api\Builders\ManagementBuilder;
+use GlobalPayments\Api\Entities\Enums\CardType;
 use GlobalPayments\Api\Entities\Enums\PaymentMethodType;
 use GlobalPayments\Api\Entities\Enums\TransactionModifier;
 use GlobalPayments\Api\Entities\Enums\TransactionType;
@@ -259,6 +260,13 @@ class Transaction
      *
      */
     public $cardBrandTransactionId;
+    
+    /**
+     * The response from Propay
+     *
+     * @var PayFacResponseData
+     */
+    public $payFacData;
 
     public $cardNumber;
 
@@ -368,6 +376,10 @@ class Transaction
             $builder = $builder->withModifier(TransactionModifier::LEVEL_II);
         }
 
+        if ($this->cardType !== null) {
+            $builder->cardType = $this->cardType;
+        }
+
         return $builder;
     }
 
@@ -392,6 +404,21 @@ class Transaction
     public function refund($amount = null)
     {
         return (new ManagementBuilder(TransactionType::REFUND))
+            ->withPaymentMethod($this->transactionReference)
+            ->withAmount($amount);
+    }
+
+    /**
+     * Refresh the authorization associated with a transaction to get a more recent authcode or
+     * reauthorize a transaction reversed in error.
+     *
+     * @param string|float $amount
+     *
+     * @return ManagementBuilder
+     */
+    public function reauthorized($amount = null)
+    {
+        return (new ManagementBuilder(TransactionType::REAUTH))
             ->withPaymentMethod($this->transactionReference)
             ->withAmount($amount);
     }

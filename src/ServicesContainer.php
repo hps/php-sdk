@@ -49,7 +49,7 @@ class ServicesContainer
         self::configureService($config->gatewayConfig, $configName);
     }
 
-    public static function configureService($config, string $configName = 'default')
+    public static function configureService($config, $configName = 'default')
     {
         if ($config != null) {
             if (!($config->validated)) {
@@ -181,5 +181,17 @@ class ServicesContainer
         } else {
             throw new ConfigurationException("Secure 3d is not configured on the connector.");
         }
+    }
+    
+    /**
+     * @return IPayFacProvider
+     */
+    public function getPayFac($configName)
+    {
+        $provider = static::$configurations[$configName]->getPayFacProvider();
+        if ($provider != null) {
+            return $provider;
+        }
+        throw new ConfigurationException('payFacProvider is not configured');
     }
 }

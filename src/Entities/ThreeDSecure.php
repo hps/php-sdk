@@ -2,6 +2,8 @@
 
 namespace GlobalPayments\Api\Entities;
 
+use GlobalPayments\Api\Entities\Enums\ExemptionReason;
+
 class ThreeDSecure
 {
     /**
@@ -91,6 +93,11 @@ class ThreeDSecure
     public $challengeValue;
 
     /**
+     * string
+     */
+    public $challengeReturnUrl;
+
+    /**
      * @var string
      */
     public $criticalityIndicator;
@@ -157,6 +164,13 @@ class ThreeDSecure
      * @var string
      */
     public $exemptStatus;
+
+    /**
+     * The exempt reason
+     *
+     * @var ExemptionReason
+     */
+    public $exemptReason;
 
     /**
      * The URL of the Issuing Bank's ACS
@@ -231,6 +245,11 @@ class ThreeDSecure
      * @var string
      */
     public $messageVersion;
+
+    /**
+     * @var string
+     */
+    public $messageType;
 
     /**
      * The order ID used for the initial transaction
@@ -342,6 +361,11 @@ class ThreeDSecure
      */
     public $xid;
 
+    /**
+     * @var string
+     */
+    public $sessionDataFieldName;
+
     public function __construct()
     {
         $this->paymentDataType = '3DSecure';
@@ -394,6 +418,11 @@ class ThreeDSecure
             $this->version = $this->mergeValue($this->version, $secureEcom->version);
             $this->whitelistStatus = $this->mergeValue($this->whitelistStatus, $secureEcom->whitelistStatus);
             $this->xid = $this->mergeValue($this->xid, $secureEcom->xid);
+            $this->messageType = $this->mergeValue($this->messageType, $secureEcom->messageType);
+            $this->sessionDataFieldName = $this->mergeValue($this->sessionDataFieldName, $secureEcom->sessionDataFieldName);
+            $this->challengeReturnUrl = $this->mergeValue($this->challengeReturnUrl, $secureEcom->challengeReturnUrl);
+            $this->exemptStatus = $this->mergeValue($this->exemptStatus, $secureEcom->exemptStatus);
+            $this->exemptReason = $this->mergeValue($this->exemptStatus, $secureEcom->exemptReason);
         }
     }
 

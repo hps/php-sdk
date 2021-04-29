@@ -13,6 +13,7 @@ use GlobalPayments\Api\Entities\BatchSummary;
 use GlobalPayments\Api\Entities\Transaction;
 use GlobalPayments\Api\Entities\Enums\AccountType;
 use GlobalPayments\Api\Entities\Enums\AliasAction;
+use GlobalPayments\Api\Entities\Enums\CardType;
 use GlobalPayments\Api\Entities\Enums\CheckType;
 use GlobalPayments\Api\Entities\Enums\EntryMethod;
 use GlobalPayments\Api\Entities\Enums\PaymentMethodType;
@@ -40,6 +41,11 @@ use GlobalPayments\Api\Entities\Reporting\SearchCriteriaBuilder;
 use GlobalPayments\Api\Services\ReportingService;
 use GlobalPayments\Api\Entities\Enums\StoredCredentialInitiator;
 use GlobalPayments\Api\Entities\Exceptions\BuilderException;
+use GlobalPayments\Api\Entities\PayFac\PayFacResponseData;
+use GlobalPayments\Api\Entities\Reporting\LodgingData;
+use GlobalPayments\Api\Entities\Reporting\AltPaymentData;
+use GlobalPayments\Api\Entities\Reporting\AltPaymentProcessorInfo;
+use GlobalPayments\Api\Entities\Exceptions\NotImplementedException;
 
 class PorticoConnector extends XmlGateway implements IPaymentGateway
 {
@@ -184,6 +190,10 @@ class PorticoConnector extends XmlGateway implements IPaymentGateway
             $block1->appendChild($xml->createElement('ShippingAmtInfo', $builder->shippingAmount));
         }
 
+        if ($builder->surchargeAmount !== null) {
+            $block1->appendChild($xml->createElement('SurchargeAmtInfo', $builder->surchargeAmount));
+        }
+
         if ($builder->cashBackAmount !== null) {
             $block1->appendChild(
                 $xml->createElement(
@@ -205,7 +215,7 @@ class PorticoConnector extends XmlGateway implements IPaymentGateway
             $block1->appendChild($xml->createElement('Action', AliasAction::validate($builder->aliasAction)));
             $block1->appendChild($xml->createElement('Alias', $builder->alias));
         }
-      
+
         $isCheck = ($builder->paymentMethod->paymentMethodType === PaymentMethodType::ACH)
             || ($builder->paymentMethod instanceof RecurringPaymentMethod
                 && $builder->paymentMethod->paymentType === 'ACH');
@@ -233,13 +243,13 @@ class PorticoConnector extends XmlGateway implements IPaymentGateway
                 $intiator = ($builder->transactionInitiator === StoredCredentialInitiator::CARDHOLDER) ? 'C' : 'M';
                 $cardOnFileData = $xml->createElement('CardOnFileData');
                 $cardOnFileData->appendChild($xml->createElement('CardOnFile', $intiator));
-                
+
                 if (!empty($builder->cardBrandTransactionId)) {
                     $cardOnFileData->appendChild($xml->createElement('CardBrandTxnId', $builder->cardBrandTransactionId));
                 }
                 $block1->appendChild($cardOnFileData);
             }
-            
+
             $cardData->appendChild(
                 $this->hydrateManualEntry(
                     $xml,
@@ -375,13 +385,13 @@ class PorticoConnector extends XmlGateway implements IPaymentGateway
                 $intiator = ($builder->transactionInitiator === StoredCredentialInitiator::CARDHOLDER) ? 'C' : 'M';
                 $cardOnFileData = $xml->createElement('CardOnFileData');
                 $cardOnFileData->appendChild($xml->createElement('CardOnFile', $intiator));
-                
+
                 if (!empty($builder->cardBrandTransactionId)) {
                     $cardOnFileData->appendChild($xml->createElement('CardBrandTxnId', $builder->cardBrandTransactionId));
                 }
                 $block1->appendChild($cardOnFileData);
             }
-            
+
 
             if ($method->paymentType === 'ACH') {
                 $block1->appendChild($xml->createElement('CheckAction', 'SALE'));
@@ -405,6 +415,10 @@ class PorticoConnector extends XmlGateway implements IPaymentGateway
                 }
 
                 $block1->appendChild($data);
+            }
+
+            if ($method->paymentType === "ACH" && !empty($method->secCode)) {
+                $block1->appendChild($xml->createElement('SECCode', $method->secCode));
             }
 
             $data = $xml->createElement('RecurringData');
@@ -470,11 +484,11 @@ class PorticoConnector extends XmlGateway implements IPaymentGateway
                 if (!empty($builder->invoiceNumber)) {
                     $direct->appendChild($xml->createElement('DirectMktInvoiceNbr', $builder->invoiceNumber));
                 }
-                
+
                 if (!empty($builder->ecommerceInfo->shipMonth)) {
                     $direct->appendChild($xml->createElement('DirectMktShipMonth', $builder->ecommerceInfo->shipMonth));
                 }
-                
+
                 if (!empty($builder->ecommerceInfo->shipDay)) {
                     $direct->appendChild($xml->createElement('DirectMktShipDay', $builder->ecommerceInfo->shipDay));
                 }
@@ -516,7 +530,7 @@ class PorticoConnector extends XmlGateway implements IPaymentGateway
                 $xml->createElement('TxnDescriptor', $builder->dynamicDescriptor)
             );
         }
-      
+
         if ($builder->commercialData !== null) {
             $commercialDataNode = $xml->createElement('CPCData');
 
@@ -526,7 +540,7 @@ class PorticoConnector extends XmlGateway implements IPaymentGateway
 
             $block1->appendChild($commercialDataNode);
         }
-      
+
         // auto substantiation
         if ($builder->autoSubstantiation !== null) {
             $autoSubstantiationNode = $xml->createElement('AutoSubstantiation');
@@ -548,7 +562,7 @@ class PorticoConnector extends XmlGateway implements IPaymentGateway
                     $i++;
                 }
             }
-          
+
             $autoSubstantiationNode->appendChild($xml->createElement("MerchantVerificationValue", $builder->autoSubstantiation->merchantVerificationValue));
             $autoSubstantiationNode->appendChild($xml->createElement("RealTimeSubstantiation", $builder->autoSubstantiation->realTimeSubstantiation ? "Y" : "N"));
 
@@ -636,6 +650,187 @@ class PorticoConnector extends XmlGateway implements IPaymentGateway
                 }
 
                 $root->appendChild($cpc);
+            } elseif (
+                $builder->transactionType === TransactionType::EDIT
+                && $builder->transactionModifier === TransactionModifier::LEVEL_III
+            ) {
+                $cpc = $xml->createElement('CPCData');
+
+                if ($builder->commercialData->poNumber !== null) {
+                    $cpc->appendChild(
+                        $xml->createElement('CardHolderPONbr', $builder->commercialData->poNumber)
+                    );
+                }
+
+                if ($builder->commercialData->taxType !== null) {
+                    $cpc->appendChild(
+                        $xml->createElement(
+                            'TaxType',
+                            TaxType::validate($builder->commercialData->taxType)
+                        )
+                    );
+                }
+
+                if ($builder->commercialData->taxAmount !== null) {
+                    $cpc->appendChild($xml->createElement('TaxAmt', $builder->commercialData->taxAmount));
+                }
+
+                $root->appendChild($cpc);
+
+                $commercialDataNode = $xml->createElement('CorporateData');
+
+                if ($builder->cardType == 'Visa') {
+                    $visaCorporateDataNode = $xml->createElement('Visa');
+                    
+                    if (!empty($builder->commercialData->summaryCommodityCode)) {
+                        $visaCorporateDataNode->appendChild($xml->createElement('SummaryCommodityCode', $builder->commercialData->summaryCommodityCode));
+                    }
+
+                    if (!empty($builder->commercialData->discountAmount)) {
+                        $visaCorporateDataNode->appendChild($xml->createElement('DiscountAmt', $builder->commercialData->discountAmount));
+                    }
+
+                    if (!empty($builder->commercialData->freightAmount)) {
+                        $visaCorporateDataNode->appendChild($xml->createElement('FreightAmt', $builder->commercialData->freightAmount));
+                    }
+
+                    if (!empty($builder->commercialData->dutyAmount)) {
+                        $visaCorporateDataNode->appendChild($xml->createElement('DutyAmt', $builder->commercialData->dutyAmount));
+                    }
+
+                    if (!empty($builder->commercialData->destinationPostalCode)) {
+                        $visaCorporateDataNode->appendChild($xml->createElement('DestinationPostalZipCode', $builder->commercialData->destinationPostalCode));
+                    }
+
+                    if (!empty($builder->commercialData->originPostalCode)) {
+                        $visaCorporateDataNode->appendChild($xml->createElement('ShipFromPostalZipCode', $builder->commercialData->originPostalCode));
+                    }
+
+                    if (!empty($builder->commercialData->destinationCountryCode)) {
+                        $visaCorporateDataNode->appendChild($xml->createElement('DestinationCountryCode', $builder->commercialData->destinationCountryCode));
+                    }
+
+                    if (!empty($builder->commercialData->vatInvoiceNumber)) {
+                        $visaCorporateDataNode->appendChild($xml->createElement('InvoiceRefNbr', $builder->commercialData->vatInvoiceNumber));
+                    }
+
+                    if (!empty($builder->commercialData->orderDate)) {
+                        $visaCorporateDataNode->appendChild($xml->createElement('OrderDate', $builder->commercialData->orderDate));
+                    }
+
+                    if (!empty($builder->commercialData->additionalTaxDetails->taxAmount)) {
+                        $visaCorporateDataNode->appendChild($xml->createElement('VATTaxAmtFreight', $builder->commercialData->additionalTaxDetails->taxAmount));
+                    }
+
+                    if (!empty($builder->commercialData->additionalTaxDetails->taxRate)) {
+                        $visaCorporateDataNode->appendChild($xml->createElement('VATTaxRateFreight', $builder->commercialData->additionalTaxDetails->taxRate));
+                    }
+
+                    // if (!empty($builder->commercialData->somethingsome)) {
+                    //     $visaCorporateDataNode->appendChild($xml->createElement('LineItemDiscountTreatmentCode', $builder->commercialData->somethingsome));
+                    // }
+
+                    // if (!empty($builder->commercialData->somethingsome)) {
+                    //     $visaCorporateDataNode->appendChild($xml->createElement('TaxTreatment', $builder->commercialData->somethingsome));
+                    // }
+
+                    if (count($builder->commercialData->lineItems) > 0) {
+                        $lineItemsNode = $xml->createElement('LineItems');
+
+                        foreach ($builder->commercialData->lineItems as $lineItem) {
+                            $linetItemNode = $xml->createElement('LineItemDetail');
+
+                            // if (!empty($lineItem->commodityCode)) {
+                            //     $linetItemNode->appendChild($xml->createElement('ItemCommodityCode', $lineItem->commodityCode));
+                            // }
+
+                            if (!empty($lineItem->description)) {
+                                $linetItemNode->appendChild($xml->createElement('ItemDescription', $lineItem->description));
+                            }
+
+                            if (!empty($lineItem->productCode)) {
+                                $linetItemNode->appendChild($xml->createElement('ProductCode', $lineItem->productCode));
+                            }
+
+                            if (!empty($lineItem->quantity)) {
+                                $linetItemNode->appendChild($xml->createElement('Quantity', $lineItem->quantity));
+                            }
+
+                            if (!empty($lineItem->unitOfMeasure)) {
+                                $linetItemNode->appendChild($xml->createElement('UnitOfMeasure', $lineItem->unitOfMeasure));
+                            }
+
+                            if (!empty($lineItem->unitCost)) {
+                                $linetItemNode->appendChild($xml->createElement('UnitCost', $lineItem->unitCost));
+                            }
+
+                            if (!empty($lineItem->taxAmount)) {
+                                $linetItemNode->appendChild($xml->createElement('VATTaxAmt', $lineItem->taxAmount));
+                            }
+
+                            if (!empty($lineItem->taxPercentage)) {
+                                $linetItemNode->appendChild($xml->createElement('VATTaxRate', $lineItem->taxPercentage));
+                            }
+
+                            if (!empty($lineItem->discountDetails->discountPercentage)) {
+                                $linetItemNode->appendChild($xml->createElement('DiscountAmt', $lineItem->discountDetails->discountPercentage));
+                            }
+
+                            if (!empty($lineItem->totalAmount)) {
+                                $linetItemNode->appendChild($xml->createElement('LineItemTotalAmt', $lineItem->totalAmount));
+                            }
+
+                            // if (!empty($lineItem->somethingsome)) {
+                            //     $visaCorporateDataNode->appendChild($xml->createElement('LineItemTreatmentCode', $builder->commercialData->somethingsome));
+                            // }
+
+                            $lineItemsNode->appendChild($linetItemNode);
+                        };
+                    }
+
+                    if (!empty($lineItemsNode)) {
+                        $visaCorporateDataNode->appendChild($lineItemsNode);
+                    }
+                    
+                    $commercialDataNode->appendChild($visaCorporateDataNode);
+                    $root->appendChild($commercialDataNode);
+                } elseif ($builder->cardType == 'MC') {
+                    $mastercardCorporateDataNode = $xml->createElement('MC');
+
+                    if (count($builder->commercialData->lineItems) > 0) {
+                        $lineItemsNode = $xml->createElement('LineItems');
+
+                        foreach ($builder->commercialData->lineItems as $lineItem) {
+                            $linetItemNode = $xml->createElement('LineItemDetail');
+
+                            if (!empty($lineItem->description)) {
+                                $linetItemNode->appendChild($xml->createElement('ItemDescription', $lineItem->description));
+                            }
+
+                            if (!empty($lineItem->productCode)) {
+                                $linetItemNode->appendChild($xml->createElement('ProductCode', $lineItem->productCode));
+                            }
+
+                            if (!empty($lineItem->quantity)) {
+                                $linetItemNode->appendChild($xml->createElement('Quantity', $lineItem->quantity));
+                            }
+
+                            if (!empty($lineItem->unitCost)) {
+                                $linetItemNode->appendChild($xml->createElement('ItemTotalAmt', $lineItem->unitCost));
+                            }
+
+                            if (!empty($lineItem->unitOfMeasure)) {
+                                $linetItemNode->appendChild($xml->createElement('UnitOfMeasure', $lineItem->unitOfMeasure));
+                            }
+
+                            $lineItemsNode->appendChild($linetItemNode);
+                        };
+                    }
+
+                    $mastercardCorporateDataNode->appendChild($lineItemsNode);
+                    $commercialDataNode->appendChild($mastercardCorporateDataNode);
+                    $root->appendChild($commercialDataNode);
+                }
             } else {
                 // amount
                 if ($builder->amount !== null) {
@@ -1165,11 +1360,17 @@ class PorticoConnector extends XmlGateway implements IPaymentGateway
             $result->batchSummary->totalAmount = (string)$item->TotalAmt;
             $result->batchSummary->sequenceNumber = (string)$item->BatchSeqNbr;
         }
-        
+
         if (isset($item) && isset($item->CardBrandTxnId)) {
             $result->cardBrandTransactionId = (string)$item->CardBrandTxnId;
         }
-
+        
+        if(!empty($root->PaymentFacilitatorTxnId) || !empty($root->PaymentFacilitatorTxnNbr)){
+            $result->payFacData = new PayFacResponseData();            
+            $result->payFacData->transactionId = !empty($root->PaymentFacilitatorTxnId) ? (string) $root->PaymentFacilitatorTxnId : '';
+            $result->payFacData->transactionNumber = !empty($root->PaymentFacilitatorTxnNbr) ? (string) $root->PaymentFacilitatorTxnNbr : '';
+        }
+        
         return $result;
     }
 
@@ -1600,7 +1801,10 @@ class PorticoConnector extends XmlGateway implements IPaymentGateway
                 }
                 throw new UnsupportedTransactionException('Transaction not supported for this payment method.');
             case TransactionType::EDIT:
-                if ($builder->transactionModifier === TransactionModifier::LEVEL_II) {
+                if (
+                    $builder->transactionModifier === TransactionModifier::LEVEL_II || 
+                    $builder->transactionModifier === TransactionModifier::LEVEL_III
+                    ) {
                     return 'CreditCPCEdit';
                 } else {
                     return 'CreditTxnEdit';
@@ -1742,7 +1946,7 @@ class PorticoConnector extends XmlGateway implements IPaymentGateway
         if ($isCheck && $builder->paymentMethod instanceof RecurringPaymentMethod) {
             return null;
         }
-        
+
         if ($builder->billingAddress !== null) {
             $holder->appendChild(
                 $xml->createElement($isCheck ? 'Address1' : 'CardHolderAddr', $builder->billingAddress->streetAddress1)
@@ -1981,7 +2185,7 @@ class PorticoConnector extends XmlGateway implements IPaymentGateway
 
         return $trackData;
     }
-    
+
     public function supportsHostedPayments()
     {
         return $this->supportsHostedPayments;

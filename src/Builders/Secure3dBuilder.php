@@ -3,7 +3,10 @@
 namespace GlobalPayments\Api\Builders;
 
 use GlobalPayments\Api\Entities\Enums\DecoupledFlowRequest;
+use GlobalPayments\Api\Entities\Enums\StoredCredentialInitiator;
 use GlobalPayments\Api\Entities\Enums\WhiteListStatus;
+use GlobalPayments\Api\Entities\StoredCredential;
+use GlobalPayments\Api\Gateways\GpApiConnector;
 use GlobalPayments\Api\ServicesContainer;
 use GlobalPayments\Api\Entities\Exceptions\ApiException;
 use GlobalPayments\Api\Entities\Exceptions\GatewayException;
@@ -186,6 +189,15 @@ class Secure3dBuilder extends BaseBuilder
      * @var string
      */
     public $idempotencyKey;
+    /**
+     * @var bool
+     */
+    public $enableExemptionOptimization;
+
+    /**
+     * @var StoredCredential
+     */
+    public $storedCredential;
 
     public function __construct($transactionType)
     {
@@ -1300,6 +1312,28 @@ class Secure3dBuilder extends BaseBuilder
     }
 
     /**
+     * @return Secure3dBuilder
+     */
+    public function withStoredCredential($storedCredential)
+    {
+        $this->storedCredential = $storedCredential;
+
+        return $this;
+    }
+
+    /**
+     * @param bool $value
+     *
+     * @return Secure3dBuilder
+     */
+    public function withEnableExemptionOptimization($value)
+    {
+        $this->enableExemptionOptimization = $value;
+
+        return $this;
+    }
+
+    /**
      * @throws ApiException
      * @return ThreeDSecure */
     public function execute($configName = 'default', $version = Secure3dVersion::ANY)
@@ -1345,6 +1379,9 @@ class Secure3dBuilder extends BaseBuilder
                 if ($exc->responseCode != null) {
                     if ($exc->responseCode == '110' && $provider->getVersion() === Secure3dVersion::ONE) {
                         return $rvalue;
+                    }
+                    if ($provider instanceof GpApiConnector) {
+                        throw $exc;
                     }
                 } elseif ((bool)$canDowngrade && $this->transactionType === TransactionType::VERIFY_ENROLLED) { // check if we can downgrade
                     return $this->execute($configName, Secure3dVersion::ONE);

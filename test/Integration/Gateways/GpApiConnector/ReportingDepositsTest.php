@@ -4,7 +4,6 @@ namespace Gateways\GpApiConnector;
 
 use GlobalPayments\Api\Entities\Enums\Environment;
 use GlobalPayments\Api\Entities\Enums\GpApi\DepositSortProperty;
-use GlobalPayments\Api\Entities\Enums\GpApi\DepositStatus;
 use GlobalPayments\Api\Entities\Enums\GpApi\SortDirection;
 use GlobalPayments\Api\Entities\Exceptions\ApiException;
 use GlobalPayments\Api\Entities\Reporting\DataServiceCriteria;
@@ -38,20 +37,38 @@ class ReportingDepositsTest extends TestCase
         $this->assertEquals($depositId, $response->depositId);
     }
 
+    public function testReportDepositDetailWrongId()
+    {
+        $depositId = 'DEP_0000000001';
+        $exceptionCaught = false;
+        try {
+            ReportingService::depositDetail($depositId)
+                ->execute();
+        } catch (ApiException $e) {
+            $exceptionCaught = true;
+            $this->assertEquals('40118', $e->responseCode);
+            $this->assertEquals("Status Code: RESOURCE_NOT_FOUND - Deposits " . $depositId . " not found at this /ucp/settlement/deposits/" . $depositId, $e->getMessage());
+        } finally {
+            $this->assertTrue($exceptionCaught);
+        }
+    }
+
     public function testReportFindDepositsByStartDateAndOrderByTimeCreated()
     {
         $startDate = new \DateTime('2020-11-01 midnight');
         try {
-            $response = ReportingService::findDeposits()
+            $response = ReportingService::findDepositsPaged(1, 10)
                 ->orderBy(DepositSortProperty::TIME_CREATED, SortDirection::DESC)
-                ->withPaging(1, 10)
                 ->where(SearchCriteria::START_DATE, $startDate)
                 ->execute();
         } catch (ApiException $e) {
             $this->fail("Find deposits by start date failed with: " . $e->getMessage());
         }
+
+        $this->assertNotNull($response);
+        $this->assertNotEmpty($response->result);
         /** @var DepositSummary $randomDeposit */
-        $randomDeposit = $response[array_rand($response)];
+        $randomDeposit = $response->result[array_rand($response->result)];
         $this->assertNotNull($randomDeposit);
         $this->assertInstanceOf(DepositSummary::class, $randomDeposit);
         $this->assertGreaterThanOrEqual($startDate, $randomDeposit->depositDate);
@@ -61,16 +78,18 @@ class ReportingDepositsTest extends TestCase
     {
         $startDate = new \DateTime('2020-11-01 midnight');
         try {
-            $response = ReportingService::findDeposits()
+            $response = ReportingService::findDepositsPaged(1, 10)
                 ->orderBy(DepositSortProperty::DEPOSIT_ID, SortDirection::DESC)
-                ->withPaging(1, 10)
                 ->where(SearchCriteria::START_DATE, $startDate)
                 ->execute();
         } catch (ApiException $e) {
             $this->fail("Find deposits order by deposit id failed with: " . $e->getMessage());
         }
+
+        $this->assertNotNull($response);
+        $this->assertNotEmpty($response->result);
         /** @var DepositSummary $randomDeposit */
-        $randomDeposit = $response[array_rand($response)];
+        $randomDeposit = $response->result[array_rand($response->result)];
         $this->assertNotNull($randomDeposit);
         $this->assertInstanceOf(DepositSummary::class, $randomDeposit);
     }
@@ -79,16 +98,18 @@ class ReportingDepositsTest extends TestCase
     {
         $startDate = new \DateTime('2020-11-01 midnight');
         try {
-            $response = ReportingService::findDeposits()
+            $response = ReportingService::findDepositsPaged(1, 10)
                 ->orderBy(DepositSortProperty::STATUS, SortDirection::DESC)
-                ->withPaging(1, 10)
                 ->where(SearchCriteria::START_DATE, $startDate)
                 ->execute();
         } catch (ApiException $e) {
             $this->fail("Find deposits order by status failed with: " . $e->getMessage());
         }
+
+        $this->assertNotNull($response);
+        $this->assertNotEmpty($response->result);
         /** @var DepositSummary $randomDeposit */
-        $randomDeposit = $response[array_rand($response)];
+        $randomDeposit = $response->result[array_rand($response->result)];
         $this->assertNotNull($randomDeposit);
         $this->assertInstanceOf(DepositSummary::class, $randomDeposit);
     }
@@ -97,16 +118,18 @@ class ReportingDepositsTest extends TestCase
     {
         $startDate = new \DateTime('2020-11-01 midnight');
         try {
-            $response = ReportingService::findDeposits()
+            $response = ReportingService::findDepositsPaged(1, 10)
                 ->orderBy(DepositSortProperty::TYPE, SortDirection::DESC)
-                ->withPaging(1, 10)
                 ->where(SearchCriteria::START_DATE, $startDate)
                 ->execute();
         } catch (ApiException $e) {
             $this->fail("Find deposits order by type failed with: " . $e->getMessage());
         }
+
+        $this->assertNotNull($response);
+        $this->assertNotEmpty($response->result);
         /** @var DepositSummary $randomDeposit */
-        $randomDeposit = $response[array_rand($response)];
+        $randomDeposit = $response->result[array_rand($response->result)];
         $this->assertNotNull($randomDeposit);
         $this->assertInstanceOf(DepositSummary::class, $randomDeposit);
     }
@@ -115,15 +138,15 @@ class ReportingDepositsTest extends TestCase
     {
         $startDate = new \DateTime('2020-11-01 midnight');
         $endDate = new \DateTime('2021-01-15 midnight');
-        $response = ReportingService::findDeposits()
+        $response = ReportingService::findDepositsPaged(1, 10)
             ->orderBy(DepositSortProperty::TIME_CREATED, SortDirection::DESC)
-            ->withPaging(1, 10)
             ->where(SearchCriteria::START_DATE, $startDate)
             ->andWith(SearchCriteria::END_DATE, $endDate)
             ->execute();
 
-
-        $randomDeposit = $response[array_rand($response)];
+        $this->assertNotNull($response);
+        $this->assertNotEmpty($response->result);
+        $randomDeposit = $response->result[array_rand($response->result)];
         $this->assertNotNull($randomDeposit);
         $this->assertInstanceOf(DepositSummary::class, $randomDeposit);
     }
@@ -134,9 +157,8 @@ class ReportingDepositsTest extends TestCase
         $amount = 140;
 
         try {
-            $response = ReportingService::findDeposits()
+            $response = ReportingService::findDepositsPaged(1, 10)
                 ->orderBy(DepositSortProperty::TIME_CREATED, SortDirection::DESC)
-                ->withPaging(1, 10)
                 ->where(SearchCriteria::START_DATE, $startDate)
                 ->andWith(DataServiceCriteria::AMOUNT, $amount)
                 ->execute();
@@ -145,7 +167,7 @@ class ReportingDepositsTest extends TestCase
         }
 
         $this->assertNotNull($response);
-        $this->assertTrue(sizeof($response)==0);
+        $this->assertTrue(sizeof($response->result) == 0);
     }
 
     public function testReportFindDepositsByAmount()
@@ -154,20 +176,22 @@ class ReportingDepositsTest extends TestCase
         $amount = 141;
 
         try {
-            $response = ReportingService::findDeposits()
+            $response = ReportingService::findDepositsPaged(1, 10)
                 ->orderBy(DepositSortProperty::TIME_CREATED, SortDirection::DESC)
-                ->withPaging(1, 10)
                 ->where(SearchCriteria::START_DATE, $startDate)
                 ->andWith(DataServiceCriteria::AMOUNT, $amount)
                 ->execute();
         } catch (ApiException $e) {
             $this->fail("Find deposits by amount failed with: " . $e->getMessage());
         }
+
+        $this->assertNotNull($response);
+        $this->assertNotEmpty($response->result);
         /** @var DepositSummary $randomDeposit */
-        $randomDeposit = $response[array_rand($response)];
+        $randomDeposit = $response->result[array_rand($response->result)];
         $this->assertNotNull($randomDeposit);
         $this->assertInstanceOf(DepositSummary::class, $randomDeposit);
-        foreach ($response as $deposit) {
+        foreach ($response->result as $deposit) {
             $this->assertEquals($deposit->amount, $amount);
         }
     }
@@ -175,14 +199,9 @@ class ReportingDepositsTest extends TestCase
     public function setUpConfig()
     {
         $config = new GpApiConfig();
-        $accessTokenInfo = new \GlobalPayments\Api\Utils\AccessTokenInfo();
-        //this is gpapistuff stuff
-        $config->setAppId('VuKlC2n1cr5LZ8fzLUQhA7UObVks6tFF');
-        $config->setAppKey('NmGM0kg92z2gA7Og');
+        $config->appId = 'VuKlC2n1cr5LZ8fzLUQhA7UObVks6tFF';
+        $config->appKey = 'NmGM0kg92z2gA7Og';
         $config->environment = Environment::TEST;
-        $config->setAccessTokenInfo($accessTokenInfo);
-//        $klogger = new Logger("C:\\laragon\\www\\PHP-SDK-v3\\logs");
-//        $config->requestLogger = new SampleRequestLogger($klogger);
 
         return $config;
     }

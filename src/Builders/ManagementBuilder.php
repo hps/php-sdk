@@ -2,6 +2,7 @@
 
 namespace GlobalPayments\Api\Builders;
 
+use GlobalPayments\Api\Entities\Enums\CommercialIndicator;
 use GlobalPayments\Api\Entities\Enums\TaxType;
 use GlobalPayments\Api\Entities\Enums\TransactionModifier;
 use GlobalPayments\Api\Entities\Enums\TransactionType;
@@ -34,10 +35,24 @@ class ManagementBuilder extends TransactionBuilder
     public $authAmount;
 
     /**
+     * Card Brand
+     *
+     * @internal
+     * @var string
+     */
+    public $cardType;
+
+    /**
      * @internal
      * @var string
      */
     public $clientTransactionId;
+    
+    /**
+     * 
+     * @var CommercialData
+     */
+    public $commercialData;
 
     /**
      * Request currency
@@ -148,6 +163,11 @@ class ManagementBuilder extends TransactionBuilder
     public $idempotencyKey;
 
     /**
+     * @var string
+     */
+    public $batchReference;
+
+    /**
      * {@inheritdoc}
      *
      * @param TransactionType $type Request transaction type
@@ -202,7 +222,7 @@ class ManagementBuilder extends TransactionBuilder
      *
      * @return Transaction
      */
-    public function execute(string $configName = 'default')
+    public function execute($configName = 'default')
     {
         parent::execute($configName);
         return ServicesContainer::instance()
@@ -270,6 +290,24 @@ class ManagementBuilder extends TransactionBuilder
     public function withAuthAmount($authAmount)
     {
         $this->authAmount = $authAmount;
+        return $this;
+    }
+
+    /**
+     * Used in conjunction with edit() on CPCEdit requests
+     *
+     * @param CommercialData
+     *
+     * @return ManagementBuilder
+     */
+    public function withCommercialData($commercialData)
+    {
+        $this->commercialData = $commercialData;
+
+        if ($commercialData->commercialIndicator === CommercialIndicator::LEVEL_III) {
+            $this->transactionModifier = TransactionModifier::LEVEL_III;
+        }
+        
         return $this;
     }
 
@@ -474,6 +512,13 @@ class ManagementBuilder extends TransactionBuilder
     public function withIdempotencyKey($value)
     {
         $this->idempotencyKey = $value;
+
+        return $this;
+    }
+
+    public function withBatchReference($value)
+    {
+        $this->batchReference = $value;
 
         return $this;
     }

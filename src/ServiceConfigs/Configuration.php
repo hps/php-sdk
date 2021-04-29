@@ -4,6 +4,7 @@ namespace GlobalPayments\Api\ServiceConfigs;
 
 use GlobalPayments\Api\ConfiguredServices;
 use GlobalPayments\Api\Entities\Enums\Environment;
+use GlobalPayments\Api\Entities\IWebProxy;
 
 abstract class Configuration
 {
@@ -22,6 +23,11 @@ abstract class Configuration
     /** @var bool */
     public $validated;
 
+    /**
+     * @var IWebProxy
+     */
+    public $webProxy;
+
     abstract public function configureContainer(ConfiguredServices $services);
 
     /** @var bool */
@@ -30,7 +36,8 @@ abstract class Configuration
     /** @var bool */
     public $forceGatewayTimeout;
 
-    public function validate() {
+    public function validate()
+    {
         $this->validated = true;
     }
 }

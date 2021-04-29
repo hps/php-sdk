@@ -5,118 +5,124 @@ namespace Gateways\GpApiConnector;
 
 use GlobalPayments\Api\Entities\Enums\Environment;
 use GlobalPayments\Api\Entities\Exceptions\GatewayException;
+use GlobalPayments\Api\Entities\GpApi\AccessTokenInfo;
+use GlobalPayments\Api\PaymentMethods\CreditCardData;
 use GlobalPayments\Api\ServiceConfigs\Gateways\GpApiConfig;
 use GlobalPayments\Api\Services\GpApiService;
 use GlobalPayments\Api\ServicesContainer;
-use GlobalPayments\Api\Utils\AccessTokenInfo;
 use PHPUnit\Framework\TestCase;
 
 class AccessTokenTest extends TestCase
 {
-    /** @var $accessTokenInfo AccessTokenInfo */
-    private $accessTokenInfo;
     private $environment = Environment::TEST;
     private $appId = "i872l4VgZRtSrykvSn8Lkah8RE1jihvT";
     private $appKey = "9pArW2uWoA8enxKc";
+    /**
+     * @var GpApiConfig $config
+     */
+    private $config;
 
-    public function testAccessTokenInfoAccessTokenExistence()
+    public function setup()
     {
-        ServicesContainer::configureService($this->setUpConfig());
-        $accessToken = $this->accessTokenInfo->generateAccessToken();
-
-        $this->assertNotEmpty($accessToken->token);
+        $this->setUpConfig();
     }
 
-    public function testAccessTokenInfoAccountNameExistence()
+    public function testGenerateAccessToken()
     {
-        ServicesContainer::configureService($this->setUpConfig());
-        $this->assertNotEmpty($this->accessTokenInfo->getDataAccountName());
-        $this->assertNotEmpty($this->accessTokenInfo->getDisputeManagementAccountName());
-        $this->assertNotEmpty($this->accessTokenInfo->getTransactionProcessingAccountName());
-        $this->assertNotEmpty($this->accessTokenInfo->getTokenizationAccountName());
-    }
-
-    public function testGenerateAccessTokenManual()
-    {
-        /**
-         * @var AccessTokenInfo $accessTokenInfo
-         */
-        $accessTokenInfo = GpApiService::generateTransactionKey($this->environment, $this->appId, $this->appKey);
-
-        $this->assertNotNull($accessTokenInfo);
-        $this->assertNotNull($accessTokenInfo->getAccessToken());
-        $this->assertNotNull($accessTokenInfo->getDataAccountName());
-        $this->assertNotNull($accessTokenInfo->getDisputeManagementAccountName());
-        $this->assertNotNull($accessTokenInfo->getTokenizationAccountName());
-        $this->assertNotNull($accessTokenInfo->getTransactionProcessingAccountName());
-    }
-
-    public function testCreateAccessTokenWithSpecificExpiredDate()
-    {
-        $accessTokenInfo = GpApiService::generateTransactionKey($this->environment, $this->appId, $this->appKey, 200, 'WEEK');
-
-        $this->assertNotNull($accessTokenInfo);
-        $this->assertNotNull($accessTokenInfo->getAccessToken());
-        $this->assertNotNull($accessTokenInfo->getDataAccountName());
-        $this->assertNotNull($accessTokenInfo->getDisputeManagementAccountName());
-        $this->assertNotNull($accessTokenInfo->getTokenizationAccountName());
-        $this->assertNotNull($accessTokenInfo->getTransactionProcessingAccountName());
+        $accessTokenInfo = GpApiService::generateTransactionKey($this->config);
+        $this->assertAccessTokenResponse($accessTokenInfo);
     }
 
     public function testCreateAccessTokenWithSpecific_SecondsToExpire()
     {
-        $accessTokenInfo = GpApiService::generateTransactionKey($this->environment, $this->appId, $this->appKey, 200);
+        $this->config->secondsToExpire = 200;
 
-        $this->assertNotNull($accessTokenInfo);
-        $this->assertNotNull($accessTokenInfo->getAccessToken());
-        $this->assertNotNull($accessTokenInfo->getDataAccountName());
-        $this->assertNotNull($accessTokenInfo->getDisputeManagementAccountName());
-        $this->assertNotNull($accessTokenInfo->getTokenizationAccountName());
-        $this->assertNotNull($accessTokenInfo->getTransactionProcessingAccountName());
+        $accessTokenInfo = GpApiService::generateTransactionKey($this->config);
+        $this->assertAccessTokenResponse($accessTokenInfo);
     }
 
     public function testCreateAccessTokenWithSpecific_IntervalToExpire()
     {
-        $accessTokenInfo = GpApiService::generateTransactionKey($this->environment, $this->appId, $this->appKey, null, "1_HOUR");
+        $this->config->intervalToExpire = '1_HOUR';
 
-        $this->assertNotNull($accessTokenInfo);
-        $this->assertNotNull($accessTokenInfo->getAccessToken());
-        $this->assertNotNull($accessTokenInfo->getDataAccountName());
-        $this->assertNotNull($accessTokenInfo->getDisputeManagementAccountName());
-        $this->assertNotNull($accessTokenInfo->getTokenizationAccountName());
-        $this->assertNotNull($accessTokenInfo->getTransactionProcessingAccountName());
+        $accessTokenInfo = GpApiService::generateTransactionKey($this->config);
+        $this->assertAccessTokenResponse($accessTokenInfo);
+    }
+
+    public function testCreateAccessTokenWithSpecificExpiredDate()
+    {
+        $this->config->secondsToExpire = 200;
+        $this->config->intervalToExpire = 'WEEK';
+
+        $accessTokenInfo = GpApiService::generateTransactionKey($this->config);
+        $this->assertAccessTokenResponse($accessTokenInfo);
     }
 
     public function testGenerateAccessTokenWrongAppId()
     {
+        $this->config->appId = $this->appId . 'a';
         try {
-            GpApiService::generateTransactionKey($this->environment, $this->appId . "a", $this->appKey);
+            GpApiService::generateTransactionKey($this->config);
         } catch (GatewayException $e) {
             $this->assertEquals('40004', $e->responseCode);
-            $this->assertEquals('Status Code: ACTION_NOT_AUTHORIZED - Credentials not recognized to create access token.', $e->getMessage());
+            $this->assertEquals('Status Code: ACTION_NOT_AUTHORIZED - App credentials not recognized', $e->getMessage());
         }
     }
 
     public function testGenerateAccessTokenWrongAppKey()
     {
+        $this->config->appKey = $this->appKey . 'a';
         try {
-            GpApiService::generateTransactionKey($this->environment, $this->appId, $this->appKey . "a");
+            GpApiService::generateTransactionKey($this->config);
         } catch (GatewayException $e) {
             $this->assertEquals('40004', $e->responseCode);
             $this->assertEquals('Status Code: ACTION_NOT_AUTHORIZED - Credentials not recognized to create access token.', $e->getMessage());
         }
     }
 
+    public function testUseExpiredAccessToken()
+    {
+        $accessTokenInfo = new AccessTokenInfo();
+        $accessTokenInfo->accessToken = "r1SzGAx2K9z5FNiMHkrapfRh8BC8";
+        $accessTokenInfo->dataAccountName = "Settlement Reporting";
+        $accessTokenInfo->disputeManagementAccountName = "Dispute Management";
+        $accessTokenInfo->tokenizationAccountName = "Tokenization";
+        $accessTokenInfo->transactionProcessingAccountName = "Transaction_Processing";
+        $config = new GpApiConfig();
+        $config->accessTokenInfo = $accessTokenInfo;
+
+        ServicesContainer::configureService($config);
+
+        $card = new CreditCardData();
+        $card->number = "4263970000005262";
+        $card->expMonth = "05";
+        $card->expYear = "2025";
+        $card->cvn = "852";
+
+        try {
+            $card->verify()->execute();
+        } catch (GatewayException $e) {
+            $this->assertEquals('40001', $e->responseCode);
+            $this->assertEquals('Status Code: NOT_AUTHENTICATED - Invalid access token', $e->getMessage());
+        }
+    }
+
+    private function assertAccessTokenResponse(AccessTokenInfo $accessTokenInfo)
+    {
+        $this->assertNotNull($accessTokenInfo);
+        $this->assertNotNull($accessTokenInfo->accessToken);
+
+        $this->assertEquals("Settlement Reporting", $accessTokenInfo->dataAccountName);
+        $this->assertEquals("Dispute Management", $accessTokenInfo->disputeManagementAccountName);
+        $this->assertEquals("Tokenization", $accessTokenInfo->tokenizationAccountName);
+        $this->assertEquals("Transaction_Processing", $accessTokenInfo->transactionProcessingAccountName);
+    }
+
     public function setUpConfig()
     {
-        $config = new GpApiConfig();
-        $accessTokenManager = new \GlobalPayments\Api\Utils\AccessTokenInfo();
-        //this is gpapistuff stuff
-        $config->setAppId('VuKlC2n1cr5LZ8fzLUQhA7UObVks6tFF');
-        $config->setAppKey('NmGM0kg92z2gA7Og');
-        $config->setAccessTokenInfo($accessTokenManager);
-        $this->accessTokenInfo = $accessTokenManager;
-
-        return $config;
+        $this->config = new GpApiConfig();
+        $this->config->appId = $this->appId;
+        $this->config->appKey = $this->appKey;
+        $this->config->environment = $this->environment;
     }
 }

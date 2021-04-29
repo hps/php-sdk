@@ -3,6 +3,7 @@
 namespace GlobalPayments\Api\Gateways;
 
 use GlobalPayments\Api\Entities\IRequestLogger;
+use GlobalPayments\Api\Entities\IWebProxy;
 use GlobalPayments\Api\Utils\Logging\Logger;
 
 abstract class Gateway
@@ -36,6 +37,11 @@ abstract class Gateway
      * @var $requestLogger IRequestLogger
      */
     public $requestLogger;
+
+    /**
+     * @var IWebProxy
+     */
+    public $webProxy;
 
     /**
      * @param string $contentType
@@ -79,7 +85,7 @@ abstract class Gateway
 
             $this->headers = array_merge($this->headers, [
                 'Content-Type' => sprintf('%s; charset=UTF-8', $this->contentType),
-                'Content-Length' => $data === null ? 0 : strlen($data),
+                'Content-Length' => empty($data) ? 0 : strlen($data),
             ]);
 
             $headers = [];
@@ -102,6 +108,13 @@ abstract class Gateway
             curl_setopt($request, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
             curl_setopt($request, CURLOPT_VERBOSE, false);
             curl_setopt($request, CURLOPT_HEADER, true);
+
+            if (!empty($this->webProxy)) {
+                curl_setopt($request, CURLOPT_PROXY, $this->webProxy->uri);
+                if (!empty($this->webProxy->username) && !empty($this->webProxy->password)) {
+                    curl_setopt($request, CURLOPT_PROXYUSERPWD, $this->webProxy->username . ':' , $this->webProxy->password);
+                }
+            }
 
             // Define the constant manually for earlier versions of PHP.
             // Disable phpcs here since this constant does not exist until PHP 5.5.19.

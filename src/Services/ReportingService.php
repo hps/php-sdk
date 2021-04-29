@@ -69,4 +69,60 @@ class ReportingService
         return (new TransactionReportBuilder(ReportType::SETTLEMENT_DISPUTE_DETAIL))
             ->withSettlementDisputeId($settlementDisputeId);
     }
+
+    public static function findTransactionsPaged($page, $pageSize, $transactionId = null)
+    {
+        return (new TransactionReportBuilder(ReportType::FIND_TRANSACTIONS_PAGED))
+            ->withTransactionId($transactionId)
+            ->withPaging($page, $pageSize);
+    }
+
+    public static function findSettlementTransactionsPaged($page, $pageSize, $transactionId = null)
+    {
+        return (new TransactionReportBuilder(ReportType::FIND_SETTLEMENT_TRANSACTIONS_PAGED))
+            ->withTransactionId($transactionId)
+            ->withPaging($page, $pageSize);
+    }
+
+    public static function findDepositsPaged($page, $pageSize)
+    {
+        return (new TransactionReportBuilder(ReportType::FIND_DEPOSITS_PAGED))
+            ->withPaging($page, $pageSize);
+    }
+
+    public static function findDisputesPaged($page, $pageSize)
+    {
+        return (new TransactionReportBuilder(ReportType::FIND_DISPUTES_PAGED))
+            ->withPaging($page, $pageSize);
+    }
+
+    public static function findSettlementDisputesPaged($page, $pageSize)
+    {
+        return (new TransactionReportBuilder(ReportType::FIND_SETTLEMENT_DISPUTES_PAGED))
+            ->withPaging($page, $pageSize);
+    }
+
+    public static function findStoredPaymentMethodsPaged($page, $pageSize)
+    {
+        return (new TransactionReportBuilder(ReportType::FIND_STORED_PAYMENT_METHODS_PAGED))
+            ->withPaging($page, $pageSize);
+    }
+
+    public static function storedPaymentMethodDetail($storedPaymentMethodId)
+    {
+        return (new TransactionReportBuilder(ReportType::STORED_PAYMENT_METHOD_DETAIL))
+            ->withStoredPaymentMethodId($storedPaymentMethodId);
+    }
+
+    public static function findActionsPaged($page, $pageSize)
+    {
+        return (new TransactionReportBuilder(ReportType::FIND_ACTIONS_PAGED))
+            ->withPaging($page, $pageSize);
+    }
+
+    public static function actionDetail($actionId)
+    {
+        return (new TransactionReportBuilder(ReportType::ACTION_DETAIL))
+            ->withActionId($actionId);
+    }
 }

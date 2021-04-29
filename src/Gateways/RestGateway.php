@@ -40,7 +40,7 @@ abstract class RestGateway extends Gateway
         $response = $this->sendRequest($verb, $endpoint, $data, $queryStringParams);
 
         if ($this->isGpApi()) {
-            if (strpos($response->header, 'Content-Encoding: gzip') !== false) {
+            if (strpos($response->header, ': gzip') !== false) {
                 $response->rawResponse = gzdecode($response->rawResponse);
             }
         }
@@ -63,11 +63,18 @@ abstract class RestGateway extends Gateway
                 }
                 throw $gatewayException;
             } else {
+                $errMsgProperty = ['error_description', 'message' , 'eos_reason'];
+                foreach ($errMsgProperty as $propertyName) {
+                    if (property_exists($error, $propertyName)) {
+                        $errorMessage = $error->{$propertyName};
+                        break;
+                    }
+                }
                 throw new GatewayException(
                     sprintf(
                         'Status Code: %s - %s',
                         $response->statusCode,
-                        isset($error->error_description) ? $error->error_description : (isset($error->message) ? $error->message : (string)$error)
+                        !empty($errorMessage) ? $errorMessage : (string)$error
                     )
                 );
             }
@@ -78,7 +85,7 @@ abstract class RestGateway extends Gateway
 
     private function isGpApi()
     {
-        return isset($this->headers['X-GP-VERSION']);
+        return $this instanceof GpApiConnector;
     }
 
     private function array_remove_empty(&$haystack)
